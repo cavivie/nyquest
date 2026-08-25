@@ -17,6 +17,30 @@ use crate::r#async::waker::AsyncWaker;
 use crate::response::NSUrlSessionResponse;
 use crate::NSUrlSessionBackend;
 
+struct CancelTaskOnDrop(Option<objc2::rc::Retained<objc2_foundation::NSURLSessionDataTask>>);
+
+impl CancelTaskOnDrop {
+    fn new(task: objc2::rc::Retained<objc2_foundation::NSURLSessionDataTask>) -> Self {
+        Self(Some(task))
+    }
+
+    fn task(&self) -> &objc2_foundation::NSURLSessionDataTask {
+        self.0.as_deref().expect("task already taken")
+    }
+
+    fn take(mut self) -> objc2::rc::Retained<objc2_foundation::NSURLSessionDataTask> {
+        self.0.take().expect("task already taken")
+    }
+}
+
+impl Drop for CancelTaskOnDrop {
+    fn drop(&mut self) {
+        if let Some(task) = &self.0 {
+            task.cancel();
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct NSUrlSessionAsyncClient {
     inner: NSUrlSessionClient,
@@ -115,8 +139,8 @@ impl AsyncClient for NSUrlSessionAsyncClient {
             task.resume();
             DataTaskDelegate::into_shared(delegate)
         };
+        let task = CancelTaskOnDrop::new(task);
         let inner_waker = coerce_waker(shared.waker_ref());
-        // TODO: cancellation
         let response = poll_fn(|cx| {
             if let Some(response) = shared.try_take_response().into_nyquest_result().transpose() {
                 return Poll::Ready(response);
@@ -134,10 +158,10 @@ impl AsyncClient for NSUrlSessionAsyncClient {
             Poll::Pending
         })
         .await?;
-        task.error().into_nyquest_result()?;
+        task.task().error().into_nyquest_result()?;
         Ok(NSUrlSessionAsyncResponse {
             inner: NSUrlSessionResponse {
-                task,
+                task: task.take(),
                 response,
                 shared,
             },
