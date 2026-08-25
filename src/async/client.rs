@@ -23,15 +23,18 @@ impl ClientBuilder {
     ///
     /// # Panic
     ///
-    /// Panics if no backend is registered.
+    /// Panics if neither a client-specific nor global backend is configured.
     pub async fn build_async(self) -> crate::Result<AsyncClient> {
-        Ok(AsyncClient {
-            client: BACKEND
+        let client = if let Some(backend) = self.async_backend {
+            backend.create_async_client(self.options).await?
+        } else {
+            BACKEND
                 .get()
-                .expect("No backend registered. Please find a backend crate (e.g. nyquest-preset) and call the `register` method at program startup.")
+                .expect("No backend configured. Set one on ClientBuilder or register a global backend (e.g. nyquest-preset) at program startup.")
                 .create_async_client(self.options)
                 .await?
-        })
+        };
+        Ok(AsyncClient { client })
     }
 }
 

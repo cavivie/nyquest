@@ -1,6 +1,11 @@
 use std::time::Duration;
+use std::{fmt, sync::Arc};
 
+#[cfg(feature = "blocking")]
+use nyquest_interface::blocking::AnyBlockingBackend;
 use nyquest_interface::client::{CachingBehavior, ClientOptions, ProxyOptions};
+#[cfg(feature = "async")]
+use nyquest_interface::r#async::AnyAsyncBackend;
 
 #[cfg(doc)]
 use crate::client::CustomProxy;
@@ -8,12 +13,54 @@ use crate::client::CustomProxy;
 /// A builder for creating an async or blocking client with custom options.
 ///
 /// Use [`ClientBuilder::default()`] to create a new builder instance.
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub struct ClientBuilder {
     pub(crate) options: ClientOptions,
+    #[cfg(feature = "async")]
+    pub(crate) async_backend: Option<Arc<dyn AnyAsyncBackend>>,
+    #[cfg(feature = "blocking")]
+    pub(crate) blocking_backend: Option<Arc<dyn AnyBlockingBackend>>,
+}
+
+impl fmt::Debug for ClientBuilder {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut builder = f.debug_struct("ClientBuilder");
+        builder.field("options", &self.options);
+        #[cfg(feature = "async")]
+        builder.field("has_async_backend", &self.async_backend.is_some());
+        #[cfg(feature = "blocking")]
+        builder.field("has_blocking_backend", &self.blocking_backend.is_some());
+        builder.finish()
+    }
 }
 
 impl ClientBuilder {
+    /// Uses `backend` for the async client built by this builder.
+    ///
+    /// A client-specific backend takes precedence over the globally registered backend. This is
+    /// useful for libraries that accept a configured HTTP client, applications that need more than
+    /// one backend, and tests that inject a local backend. Other builders and existing clients are
+    /// not affected.
+    #[cfg(feature = "async")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
+    pub fn async_backend(mut self, backend: impl AnyAsyncBackend) -> Self {
+        self.async_backend = Some(Arc::new(backend));
+        self
+    }
+
+    /// Uses `backend` for the blocking client built by this builder.
+    ///
+    /// A client-specific backend takes precedence over the globally registered backend. This is
+    /// useful for libraries that accept a configured HTTP client, applications that need more than
+    /// one backend, and tests that inject a local backend. Other builders and existing clients are
+    /// not affected.
+    #[cfg(feature = "blocking")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "blocking")))]
+    pub fn blocking_backend(mut self, backend: impl AnyBlockingBackend) -> Self {
+        self.blocking_backend = Some(Arc::new(backend));
+        self
+    }
+
     /// Sets the base URL for the client.
     pub fn base_url(mut self, base_url: impl Into<String>) -> Self {
         self.options.base_url = Some(base_url.into());

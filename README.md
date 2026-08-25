@@ -39,6 +39,23 @@ Meanwhile, you might not need Nyquest if you:
 
 On top of the `nyquest-interface` crate and backend crates, the `nyquest` crate provides a convenient, user-friendly API for Nyquest users, including library authors and end application developers.
 
+## Client-specific backends
+
+Applications normally register one global backend through `nyquest-preset`. A client can instead
+select a backend explicitly without changing the global backend or affecting other clients:
+
+```rust,ignore
+let client = nyquest::ClientBuilder::default()
+    .async_backend(MyBackend::new(options))
+    .build_async()
+    .await?;
+```
+
+Use `async_backend` or `blocking_backend` when an application needs multiple native backends,
+backend-specific configuration, or dependency injection in a library or test. The backend remains
+type-erased in the resulting client, so its concrete type does not propagate through application
+APIs.
+
 ## Package Structure
 
 - `nyquest`: The main crate that provides a user-friendly HTTP client API.
