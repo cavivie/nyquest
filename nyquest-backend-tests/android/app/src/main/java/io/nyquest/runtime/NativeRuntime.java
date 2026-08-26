@@ -4,7 +4,7 @@ import java.util.concurrent.Executor;
 
 final class NativeRuntime {
     static {
-        System.loadLibrary("nyquest_android_runtime");
+        System.loadLibrary("nyquest_backend_tests_android");
     }
 
     private NativeRuntime() {}

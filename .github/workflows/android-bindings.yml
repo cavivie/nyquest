@@ -156,8 +156,13 @@ jobs:
             -n io.nyquest.runtime/.RuntimeTestActivity
 
           for attempt in $(seq 1 60); do
-            logs=$(timeout 5 "${adb_bin}" logcat -d -s NyquestRuntime:I '*:S' || true)
+            logs=$(timeout 5 "${adb_bin}" logcat -d \
+              -s NyquestRuntime:I AndroidRuntime:E '*:S' || true)
             if echo "${logs}" | grep -q 'NYQUEST_RUNTIME_FAIL'; then
+              echo "${logs}"
+              exit 1
+            fi
+            if echo "${logs}" | grep -q 'FATAL EXCEPTION'; then
               echo "${logs}"
               exit 1
             fi
@@ -168,6 +173,6 @@ jobs:
             sleep 2
           done
 
-          "${adb_bin}" logcat -d
+          "${adb_bin}" logcat -d -s NyquestRuntime:I AndroidRuntime:E '*:S'
           echo "Timed out waiting for the Nyquest runtime result"
           exit 1
