@@ -1,0 +1,48 @@
+plugins {
+    id "com.android.application"
+}
+
+android {
+    namespace "io.nyquest.runtime"
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "io.nyquest.runtime"
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+    }
+
+    flavorDimensions += "backend"
+    productFlavors {
+        cronet {
+            dimension "backend"
+            minSdk 24
+        }
+        httpengine {
+            dimension "backend"
+            minSdk 34
+        }
+    }
+
+    sourceSets {
+        cronet.java.srcDir "../../../backends/cronet/android/src/main/java"
+        httpengine.java.srcDir "../../../backends/android-httpengine/android/src/main/java"
+    }
+
+    buildTypes {
+        debug {
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    cronetImplementation "org.chromium.net:cronet-embedded:119.6045.31"
+}

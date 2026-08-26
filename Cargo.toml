@@ -5,6 +5,7 @@ members = [
     "backends/*",
     "examples/*",
     "presets/*",
+    "tests/android-runtime",
 ]
 resolver = "2"
 

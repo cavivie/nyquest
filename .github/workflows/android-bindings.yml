@@ -1,4 +1,4 @@
-name: Android bindings
+name: Android runtime
 
 on:
   push:
@@ -7,16 +7,45 @@ on:
     branches: ["main"]
 
 env:
-  ANDROID_API: "34"
   CARGO_TERM_COLOR: always
-  CRONET_VERSION: "119.6045.31"
 
 jobs:
-  validate:
+  runtime:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - backend: cronet
+            api: 24
+            min_api: 24
+            gradle_task: assembleCronetDebug
+            apk: app/build/outputs/apk/cronet/debug/app-cronet-debug.apk
+          - backend: cronet
+            api: 36
+            min_api: 24
+            gradle_task: assembleCronetDebug
+            apk: app/build/outputs/apk/cronet/debug/app-cronet-debug.apk
+          - backend: httpengine
+            api: 34
+            min_api: 34
+            gradle_task: assembleHttpengineDebug
+            apk: app/build/outputs/apk/httpengine/debug/app-httpengine-debug.apk
+          - backend: httpengine
+            api: 36
+            min_api: 34
+            gradle_task: assembleHttpengineDebug
+            apk: app/build/outputs/apk/httpengine/debug/app-httpengine-debug.apk
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -29,56 +58,70 @@ jobs:
         with:
           targets: x86_64-linux-android
 
-      - name: Install Android API
-        run: |
-          "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" "platforms;android-${ANDROID_API}"
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.10.2"
 
-      - name: Download Cronet API
+      - name: Install Android build dependencies
         run: |
-          mkdir -p "${RUNNER_TEMP}/cronet-api"
-          curl --fail --location --retry 3 \
-            "https://dl.google.com/dl/android/maven2/org/chromium/net/cronet-api/${CRONET_VERSION}/cronet-api-${CRONET_VERSION}.aar" \
-            --output "${RUNNER_TEMP}/cronet-api/cronet-api.aar"
-          unzip -q "${RUNNER_TEMP}/cronet-api/cronet-api.aar" classes.jar \
-            -d "${RUNNER_TEMP}/cronet-api"
+          "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" \
+            "platforms;android-34" "ndk;27.2.12479018"
+          cargo install cargo-ndk --version 4.1.2 --locked
 
-      - name: Validate Cronet Java API
+      - name: Build Rust runtime library
         run: |
-          mkdir -p "${RUNNER_TEMP}/cronet-declarations" "${RUNNER_TEMP}/cronet-real"
-          javac --release 8 \
-            -d "${RUNNER_TEMP}/cronet-declarations" \
-            backends/cronet/android/api/org/chromium/net/*.java
-          javac --release 8 \
-            -cp "${RUNNER_TEMP}/cronet-declarations" \
-            -d "${RUNNER_TEMP}/cronet-declarations" \
-            backends/cronet/android/src/main/java/io/nyquest/cronet/NativeUrlRequestCallback.java \
-            backends/cronet/android/api-test/io/nyquest/cronet/ApiContract.java
-          javac --release 8 \
-            -cp "${RUNNER_TEMP}/cronet-api/classes.jar" \
-            -d "${RUNNER_TEMP}/cronet-real" \
-            backends/cronet/android/src/main/java/io/nyquest/cronet/NativeUrlRequestCallback.java \
-            backends/cronet/android/api-test/io/nyquest/cronet/ApiContract.java
+          export ANDROID_NDK_HOME="${ANDROID_HOME}/ndk/27.2.12479018"
+          cargo ndk \
+            --target x86_64 \
+            --platform ${{ matrix.min_api }} \
+            --output-dir tests/android-runtime/app/src/main/jniLibs \
+            build --release --locked \
+            -p nyquest-android-runtime \
+            --no-default-features \
+            --features ${{ matrix.backend }}
 
-      - name: Validate HttpEngine Java API
+      - name: Build Android app
         run: |
-          mkdir -p "${RUNNER_TEMP}/httpengine-declarations" "${RUNNER_TEMP}/httpengine-real"
-          javac --release 8 \
-            -d "${RUNNER_TEMP}/httpengine-declarations" \
-            backends/android-httpengine/android/api/android/net/http/*.java
-          javac --release 8 \
-            -cp "${RUNNER_TEMP}/httpengine-declarations" \
-            -d "${RUNNER_TEMP}/httpengine-declarations" \
-            backends/android-httpengine/android/src/main/java/io/nyquest/httpengine/NativeUrlRequestCallback.java \
-            backends/android-httpengine/android/api-test/io/nyquest/httpengine/ApiContract.java
-          javac --release 8 \
-            -cp "${ANDROID_HOME}/platforms/android-${ANDROID_API}/android.jar" \
-            -d "${RUNNER_TEMP}/httpengine-real" \
-            backends/android-httpengine/android/src/main/java/io/nyquest/httpengine/NativeUrlRequestCallback.java \
-            backends/android-httpengine/android/api-test/io/nyquest/httpengine/ApiContract.java
+          gradle --project-dir tests/android-runtime \
+            ${{ matrix.gradle_task }} --no-daemon --stacktrace
 
-      - name: Check generated Rust bindings
-        run: |
-          cargo check --locked --target x86_64-linux-android \
-            -p nyquest-backend-cronet --all-features
-          cargo check --locked --target x86_64-linux-android \
-            -p nyquest-backend-android-httpengine --all-features
+      - name: Run ${{ matrix.backend }} on Android ${{ matrix.api }}
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api }}
+          arch: x86_64
+          target: google_apis
+          profile: pixel_2
+          disable-animations: true
+          emulator-options: >-
+            -no-window -gpu swiftshader_indirect -no-snapshot
+            -noaudio -no-boot-anim -camera-back none
+          script: |
+            python3 tests/android-runtime/server.py &
+            server_pid=$!
+            trap 'kill ${server_pid}' EXIT
+            curl --fail --retry 10 --retry-delay 1 \
+              http://127.0.0.1:8765/runtime
+
+            adb logcat -c
+            adb install -r "tests/android-runtime/${{ matrix.apk }}"
+            adb shell am start -W \
+              -n io.nyquest.runtime/.RuntimeTestActivity
+
+            for attempt in $(seq 1 60); do
+              logs=$(adb logcat -d -s NyquestRuntime:I '*:S')
+              if echo "${logs}" | grep -q 'NYQUEST_RUNTIME_FAIL'; then
+                echo "${logs}"
+                exit 1
+              fi
+              if echo "${logs}" | grep -q 'NYQUEST_RUNTIME_PASS'; then
+                echo "${logs}"
+                exit 0
+              fi
+              sleep 2
+            done
+
+            adb logcat -d
+            echo "Timed out waiting for the Nyquest runtime result"
+            exit 1
