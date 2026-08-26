@@ -77,4 +77,5 @@ const CRONET_BINDINGS: BackendBindings = BackendBindings {
     upload_provider_signature: "Lorg/chromium/net/UploadDataProvider;",
     disable_cache_method: "disableCache",
     disable_cache_signature: "()Lorg/chromium/net/UrlRequest$Builder;",
+    disable_cache_takes_boolean: false,
 };
