@@ -89,6 +89,13 @@ mod async_tests {
     }
 
     #[test]
+    fn async_client_without_any_backend_returns_error() {
+        let error = block_on(ClientBuilder::default().build_async()).unwrap_err();
+
+        assert!(matches!(error, nyquest::Error::NoBackendConfigured));
+    }
+
+    #[test]
     fn async_clients_can_use_different_backends_without_global_registration() {
         block_on(async {
             let first = ClientBuilder::default()
@@ -187,6 +194,13 @@ mod blocking_tests {
         fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
             self.0.read(buffer)
         }
+    }
+
+    #[test]
+    fn blocking_client_without_any_backend_returns_error() {
+        let error = ClientBuilder::default().build_blocking().unwrap_err();
+
+        assert!(matches!(error, nyquest::Error::NoBackendConfigured));
     }
 
     #[test]

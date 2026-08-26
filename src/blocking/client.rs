@@ -28,16 +28,17 @@ pub struct BlockingClient {
 impl ClientBuilder {
     /// Build a new blocking client with the given options.
     ///
-    /// # Panic
+    /// # Errors
     ///
-    /// Panics if neither a client-specific nor global backend is configured.
+    /// Returns [`crate::Error::NoBackendConfigured`] if neither a client-specific nor global
+    /// backend is configured.
     pub fn build_blocking(self) -> crate::Result<BlockingClient> {
         let client = if let Some(backend) = self.blocking_backend {
             backend.create_blocking_client(self.options)?
         } else {
             BACKEND
                 .get()
-                .expect("No backend configured. Set one on ClientBuilder or register a global backend (e.g. nyquest-preset) at program startup.")
+                .ok_or(crate::Error::NoBackendConfigured)?
                 .create_blocking_client(self.options)?
         };
         Ok(BlockingClient { client })
