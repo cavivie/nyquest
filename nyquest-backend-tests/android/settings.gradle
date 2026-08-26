@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "nyquest-android-runtime"
+rootProject.name = "nyquest-backend-tests-android"
 include ":app"

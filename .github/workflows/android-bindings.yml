@@ -67,7 +67,7 @@ jobs:
         run: |
           "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" \
             "platforms;android-34" "ndk;27.2.12479018"
-          cargo install cargo-ndk --version 4.1.2 --locked
+          cargo install cargo-ndk --version 3.5.4 --locked
 
       - name: Build Rust runtime library
         run: |
@@ -75,15 +75,15 @@ jobs:
           cargo ndk \
             --target x86_64 \
             --platform ${{ matrix.min_api }} \
-            --output-dir tests/android-runtime/app/src/main/jniLibs \
+            --output-dir nyquest-backend-tests/android/app/src/main/jniLibs \
             build --release --locked \
-            -p nyquest-android-runtime \
+            -p nyquest-backend-tests-android \
             --no-default-features \
             --features ${{ matrix.backend }}
 
       - name: Build Android app
         run: |
-          gradle --project-dir tests/android-runtime \
+          gradle --project-dir nyquest-backend-tests/android \
             ${{ matrix.gradle_task }} --no-daemon --stacktrace
 
       - name: Run ${{ matrix.backend }} on Android ${{ matrix.api }}
@@ -98,14 +98,14 @@ jobs:
             -no-window -gpu swiftshader_indirect -no-snapshot
             -noaudio -no-boot-anim -camera-back none
           script: |
-            python3 tests/android-runtime/server.py &
+            python3 nyquest-backend-tests/android/server.py &
             server_pid=$!
             trap 'kill ${server_pid}' EXIT
             curl --fail --retry 10 --retry-delay 1 \
               http://127.0.0.1:8765/runtime
 
             adb logcat -c
-            adb install -r "tests/android-runtime/${{ matrix.apk }}"
+            adb install -r "nyquest-backend-tests/android/${{ matrix.apk }}"
             adb shell am start -W \
               -n io.nyquest.runtime/.RuntimeTestActivity
 

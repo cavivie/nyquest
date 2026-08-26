@@ -1,5 +1,5 @@
 [package]
-name = "nyquest-android-runtime"
+name = "nyquest-backend-tests-android"
 version = "0.0.0"
 edition = "2021"
 rust-version.workspace = true

@@ -5,7 +5,7 @@ members = [
     "backends/*",
     "examples/*",
     "presets/*",
-    "tests/android-runtime",
+    "nyquest-backend-tests/android",
 ]
 resolver = "2"
 

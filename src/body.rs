@@ -315,7 +315,7 @@ impl<S> PartBody<S> {
     /// [`AsyncRead`](nyquest_interface::async::futures_io::AsyncRead) +
     /// [`AsyncSeek`](nyquest_interface::async::futures_io::AsyncSeek) +
     /// [`Send`] + `'static` for async clients.
-    #[cfg(any(feature = "blocking", feature = "async"))]
+    #[cfg(any(feature = "blocking-stream", feature = "async-stream"))]
     pub fn stream(stream: impl private::IntoSizedStream<S>, content_length: u64) -> Self {
         Self {
             inner: PartBodyImpl::Stream(stream.into_stream(content_length)),
@@ -344,7 +344,7 @@ impl<S> PartBody<S> {
     /// [`Send`] + `'static` for async clients.
     ///
     /// This enables chunked transfer encoding for the whole request body.
-    #[cfg(any(feature = "blocking", feature = "async"))]
+    #[cfg(any(feature = "blocking-stream", feature = "async-stream"))]
     pub fn stream_unsized(stream: impl private::IntoUnsizedStream<S>) -> Self {
         Self {
             inner: PartBodyImpl::Stream(stream.into_stream()),

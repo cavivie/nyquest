@@ -1620,16 +1620,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "nyquest-android-runtime"
-version = "0.0.0"
-dependencies = [
- "jni",
- "nyquest",
- "nyquest-backend-android-httpengine",
- "nyquest-backend-cronet",
-]
-
-[[package]]
 name = "nyquest-backend-android-httpengine"
 version = "0.1.0"
 dependencies = [
@@ -1725,6 +1715,16 @@ dependencies = [
  "nyquest-backend-winrt",
  "serde",
  "tokio",
+]
+
+[[package]]
+name = "nyquest-backend-tests-android"
+version = "0.0.0"
+dependencies = [
+ "jni",
+ "nyquest",
+ "nyquest-backend-android-httpengine",
+ "nyquest-backend-cronet",
 ]
 
 [[package]]
