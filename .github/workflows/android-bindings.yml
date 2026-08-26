@@ -70,6 +70,7 @@ jobs:
           "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" \
             "platforms;android-34" \
             "ndk;27.2.12479018" \
+            "emulator" \
             "system-images;android-${{ matrix.api }};google_apis;x86_64"
           "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" --list_installed
           cargo install cargo-ndk --version 4.1.2 --locked
@@ -95,6 +96,8 @@ jobs:
         run: |
           avd_name="nyquest-${{ matrix.backend }}-${{ matrix.api }}"
           emulator_log="${RUNNER_TEMP}/${avd_name}-emulator.log"
+          export ANDROID_AVD_HOME="${RUNNER_TEMP}/android-avd"
+          mkdir -p "${ANDROID_AVD_HOME}"
 
           echo no | "${ANDROID_HOME}/cmdline-tools/latest/bin/avdmanager" \
             create avd --force \
