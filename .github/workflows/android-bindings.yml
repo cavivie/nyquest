@@ -96,6 +96,7 @@ jobs:
         run: |
           avd_name="nyquest-${{ matrix.backend }}-${{ matrix.api }}"
           emulator_log="${RUNNER_TEMP}/${avd_name}-emulator.log"
+          adb_bin="${ANDROID_HOME}/platform-tools/adb"
           export ANDROID_AVD_HOME="${RUNNER_TEMP}/android-avd"
           mkdir -p "${ANDROID_AVD_HOME}"
 
@@ -116,7 +117,7 @@ jobs:
           server_pid=$!
 
           cleanup() {
-            adb emu kill >/dev/null 2>&1 || true
+            "${adb_bin}" emu kill >/dev/null 2>&1 || true
             kill "${server_pid}" >/dev/null 2>&1 || true
             kill "${emulator_pid}" >/dev/null 2>&1 || true
           }
@@ -124,7 +125,7 @@ jobs:
 
           boot_completed=""
           for attempt in $(seq 1 90); do
-            boot_completed=$(timeout 5 adb shell getprop sys.boot_completed 2>/dev/null || true)
+            boot_completed=$(timeout 5 "${adb_bin}" shell getprop sys.boot_completed 2>/dev/null || true)
             if [ "${boot_completed}" = "1" ]; then
               break
             fi
@@ -138,7 +139,7 @@ jobs:
 
           if [ "${boot_completed}" != "1" ]; then
             cat "${emulator_log}"
-            adb devices -l
+            "${adb_bin}" devices -l
             echo "Timed out waiting for the Android emulator to boot"
             exit 1
           fi
@@ -146,16 +147,16 @@ jobs:
           curl --fail --retry 10 --retry-delay 1 \
             http://127.0.0.1:8765/runtime
 
-          adb shell settings put global window_animation_scale 0.0
-          adb shell settings put global transition_animation_scale 0.0
-          adb shell settings put global animator_duration_scale 0.0
-          adb logcat -c
-          adb install -r "nyquest-backend-tests/android/${{ matrix.apk }}"
-          adb shell am start -W \
+          "${adb_bin}" shell settings put global window_animation_scale 0.0
+          "${adb_bin}" shell settings put global transition_animation_scale 0.0
+          "${adb_bin}" shell settings put global animator_duration_scale 0.0
+          "${adb_bin}" logcat -c
+          "${adb_bin}" install -r "nyquest-backend-tests/android/${{ matrix.apk }}"
+          "${adb_bin}" shell am start -W \
             -n io.nyquest.runtime/.RuntimeTestActivity
 
           for attempt in $(seq 1 60); do
-            logs=$(timeout 5 adb logcat -d -s NyquestRuntime:I '*:S' || true)
+            logs=$(timeout 5 "${adb_bin}" logcat -d -s NyquestRuntime:I '*:S' || true)
             if echo "${logs}" | grep -q 'NYQUEST_RUNTIME_FAIL'; then
               echo "${logs}"
               exit 1
@@ -167,6 +168,6 @@ jobs:
             sleep 2
           done
 
-          adb logcat -d
+          "${adb_bin}" logcat -d
           echo "Timed out waiting for the Nyquest runtime result"
           exit 1
