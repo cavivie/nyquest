@@ -6,9 +6,12 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 #[cfg(target_os = "android")]
-use jni::{objects::JObject, JNIEnv};
+mod android;
+
 #[cfg(target_os = "android")]
-use nyquest_backend_android_common::{AndroidBackend, BackendBindings};
+use android::{AndroidBackend, BackendBindings};
+#[cfg(target_os = "android")]
+use jni::{objects::JObject, JNIEnv};
 
 /// The backend implementation using an application-provided Cronet engine.
 #[derive(Clone)]
@@ -42,7 +45,7 @@ pub fn register(backend: CronetBackend) {
 
 #[cfg(all(target_os = "android", feature = "async"))]
 impl nyquest_interface::r#async::AsyncBackend for CronetBackend {
-    type AsyncClient = nyquest_backend_android_common::AndroidAsyncClient;
+    type AsyncClient = android::AndroidAsyncClient;
 
     async fn create_async_client(
         &self,
@@ -54,7 +57,7 @@ impl nyquest_interface::r#async::AsyncBackend for CronetBackend {
 
 #[cfg(all(target_os = "android", feature = "blocking"))]
 impl nyquest_interface::blocking::BlockingBackend for CronetBackend {
-    type BlockingClient = nyquest_backend_android_common::AndroidBlockingClient;
+    type BlockingClient = android::AndroidBlockingClient;
 
     fn create_blocking_client(
         &self,
@@ -77,4 +80,5 @@ const CRONET_BINDINGS: BackendBindings = BackendBindings {
     upload_provider_signature: "Lorg/chromium/net/UploadDataProvider;",
     disable_cache_method: "disableCache",
     disable_cache_signature: "()Lorg/chromium/net/UrlRequest$Builder;",
+    disable_cache_takes_boolean: false,
 };

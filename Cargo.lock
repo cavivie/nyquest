@@ -1297,22 +1297,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "nyquest-backend-android-common"
+name = "nyquest-backend-cronet"
 version = "0.1.0"
 dependencies = [
  "futures-util",
  "jni",
  "nyquest-interface",
  "url",
-]
-
-[[package]]
-name = "nyquest-backend-cronet"
-version = "0.1.0"
-dependencies = [
- "jni",
- "nyquest-backend-android-common",
- "nyquest-interface",
 ]
 
 [[package]]
