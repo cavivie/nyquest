@@ -92,41 +92,78 @@ jobs:
             ${{ matrix.gradle_task }} --no-daemon --stacktrace
 
       - name: Run ${{ matrix.backend }} on Android ${{ matrix.api }}
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: ${{ matrix.api }}
-          arch: x86_64
-          target: google_apis
-          profile: pixel_2
-          disable-animations: true
-          emulator-options: >-
-            -no-window -gpu swiftshader_indirect -no-snapshot
-            -noaudio -no-boot-anim -camera-back none
-          script: |
-            python3 nyquest-backend-tests/android/server.py &
-            server_pid=$!
-            trap 'kill ${server_pid}' EXIT
-            curl --fail --retry 10 --retry-delay 1 \
-              http://127.0.0.1:8765/runtime
+        run: |
+          avd_name="nyquest-${{ matrix.backend }}-${{ matrix.api }}"
+          emulator_log="${RUNNER_TEMP}/${avd_name}-emulator.log"
 
-            adb logcat -c
-            adb install -r "nyquest-backend-tests/android/${{ matrix.apk }}"
-            adb shell am start -W \
-              -n io.nyquest.runtime/.RuntimeTestActivity
+          echo no | "${ANDROID_HOME}/cmdline-tools/latest/bin/avdmanager" \
+            create avd --force \
+            --name "${avd_name}" \
+            --package "system-images;android-${{ matrix.api }};google_apis;x86_64" \
+            --device pixel_2
 
-            for attempt in $(seq 1 60); do
-              logs=$(adb logcat -d -s NyquestRuntime:I '*:S')
-              if echo "${logs}" | grep -q 'NYQUEST_RUNTIME_FAIL'; then
-                echo "${logs}"
-                exit 1
-              fi
-              if echo "${logs}" | grep -q 'NYQUEST_RUNTIME_PASS'; then
-                echo "${logs}"
-                exit 0
-              fi
-              sleep 2
-            done
+          "${ANDROID_HOME}/emulator/emulator" \
+            -avd "${avd_name}" \
+            -no-window -gpu swiftshader_indirect -no-snapshot \
+            -noaudio -no-boot-anim -camera-back none \
+            >"${emulator_log}" 2>&1 &
+          emulator_pid=$!
 
-            adb logcat -d
-            echo "Timed out waiting for the Nyquest runtime result"
+          python3 nyquest-backend-tests/android/server.py &
+          server_pid=$!
+
+          cleanup() {
+            adb emu kill >/dev/null 2>&1 || true
+            kill "${server_pid}" >/dev/null 2>&1 || true
+            kill "${emulator_pid}" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          boot_completed=""
+          for attempt in $(seq 1 90); do
+            boot_completed=$(timeout 5 adb shell getprop sys.boot_completed 2>/dev/null || true)
+            if [ "${boot_completed}" = "1" ]; then
+              break
+            fi
+            if ! kill -0 "${emulator_pid}" 2>/dev/null; then
+              cat "${emulator_log}"
+              echo "Android emulator exited before boot completed"
+              exit 1
+            fi
+            sleep 2
+          done
+
+          if [ "${boot_completed}" != "1" ]; then
+            cat "${emulator_log}"
+            adb devices -l
+            echo "Timed out waiting for the Android emulator to boot"
             exit 1
+          fi
+
+          curl --fail --retry 10 --retry-delay 1 \
+            http://127.0.0.1:8765/runtime
+
+          adb shell settings put global window_animation_scale 0.0
+          adb shell settings put global transition_animation_scale 0.0
+          adb shell settings put global animator_duration_scale 0.0
+          adb logcat -c
+          adb install -r "nyquest-backend-tests/android/${{ matrix.apk }}"
+          adb shell am start -W \
+            -n io.nyquest.runtime/.RuntimeTestActivity
+
+          for attempt in $(seq 1 60); do
+            logs=$(timeout 5 adb logcat -d -s NyquestRuntime:I '*:S' || true)
+            if echo "${logs}" | grep -q 'NYQUEST_RUNTIME_FAIL'; then
+              echo "${logs}"
+              exit 1
+            fi
+            if echo "${logs}" | grep -q 'NYQUEST_RUNTIME_PASS'; then
+              echo "${logs}"
+              exit 0
+            fi
+            sleep 2
+          done
+
+          adb logcat -d
+          echo "Timed out waiting for the Nyquest runtime result"
+          exit 1
