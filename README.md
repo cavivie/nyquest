@@ -88,6 +88,8 @@ position, including when a backend rewinds the stream.
   - `nyquest-backend-winrt`: UWP/WinRT [HttpClient](https://learn.microsoft.com/en-us/uwp/api/Windows.Web.Http.HttpClient)
   - `nyquest-backend-nsurlsession`: `NSURLSession`
   - `nyquest-backend-reqwest`: reqwest (with WASM support)
+  - `nyquest-backend-cronet`: application-provided Android Cronet engine
+  - `nyquest-backend-android-httpengine`: system `android.net.http.HttpEngine`
 - `nyquest-backend-tests`: The test framework for Nyquest backends going through `nyquest`.
 
 ## Roadmap
