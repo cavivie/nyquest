@@ -1,14 +1,19 @@
 use std::collections::{HashMap, VecDeque};
 use std::ffi::c_void;
 use std::fmt;
-use std::future::poll_fn;
 use std::io;
-use std::pin::Pin;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, OnceLock};
-use std::task::{Poll, Waker};
+use std::task::Waker;
 use std::thread;
 use std::time::Duration;
+
+#[cfg(feature = "async")]
+use std::future::poll_fn;
+#[cfg(feature = "async")]
+use std::pin::Pin;
+#[cfg(feature = "async")]
+use std::task::Poll;
 
 use jni::objects::{GlobalRef, JByteArray, JClass, JObject, JObjectArray, JString, JValue};
 use jni::sys::{jboolean, jint, jlong, JNI_FALSE, JNI_TRUE};
