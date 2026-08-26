@@ -7,7 +7,9 @@ use nyquest_interface::r#async::AnyAsyncResponse;
 
 #[cfg(feature = "async-stream")]
 use super::AsyncReadStream;
-use crate::{StatusCode, TransferProgress};
+use crate::StatusCode;
+#[cfg(feature = "async-stream")]
+use crate::TransferProgress;
 
 /// An async HTTP response.
 pub struct Response {

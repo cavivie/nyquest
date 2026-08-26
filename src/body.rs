@@ -115,6 +115,28 @@ impl<S> Body<S> {
         }
     }
 
+    /// Constructs a streaming body that reports upload progress.
+    ///
+    /// The observer is called after bytes are read from the source stream by the backend.
+    #[cfg(any(feature = "blocking-stream", feature = "async-stream"))]
+    #[cfg_attr(
+        docsrs,
+        doc(cfg(any(feature = "blocking-stream", feature = "async-stream")))
+    )]
+    pub fn stream_with_progress(
+        stream: impl private::IntoSizedStreamWithProgress<S>,
+        content_type: impl Into<Cow<'static, str>>,
+        content_length: u64,
+        observer: impl Fn(crate::TransferProgress) + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            inner: BodyImpl::Stream {
+                stream: stream.into_stream_with_progress(content_length, Box::new(observer)),
+                content_type: content_type.into(),
+            },
+        }
+    }
+
     /// Constructs a streaming non-seekable body from the given stream and
     /// content type.
     ///
@@ -136,6 +158,28 @@ impl<S> Body<S> {
         Self {
             inner: BodyImpl::Stream {
                 stream: stream.into_stream(),
+                content_type: content_type.into(),
+            },
+        }
+    }
+
+    /// Constructs a non-seekable streaming body that reports upload progress.
+    ///
+    /// The observer is called after bytes are read from the source stream by the backend. The
+    /// reported total is unknown because the stream has no declared content length.
+    #[cfg(any(feature = "blocking-stream", feature = "async-stream"))]
+    #[cfg_attr(
+        docsrs,
+        doc(cfg(any(feature = "blocking-stream", feature = "async-stream")))
+    )]
+    pub fn stream_unsized_with_progress(
+        stream: impl private::IntoUnsizedStreamWithProgress<S>,
+        content_type: impl Into<Cow<'static, str>>,
+        observer: impl Fn(crate::TransferProgress) + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            inner: BodyImpl::Stream {
+                stream: stream.into_stream_with_progress(Box::new(observer)),
                 content_type: content_type.into(),
             },
         }
@@ -219,11 +263,24 @@ impl<S> Part<S> {
 }
 
 pub(crate) mod private {
+    #[cfg(any(feature = "blocking-stream", feature = "async-stream"))]
+    pub type ProgressObserver = Box<dyn Fn(crate::TransferProgress) + Send + Sync>;
+
+    #[cfg(any(feature = "blocking-stream", feature = "async-stream"))]
     pub trait IntoSizedStream<B> {
         fn into_stream(self, size: u64) -> B;
     }
+    #[cfg(any(feature = "blocking-stream", feature = "async-stream"))]
     pub trait IntoUnsizedStream<B> {
         fn into_stream(self) -> B;
+    }
+    #[cfg(any(feature = "blocking-stream", feature = "async-stream"))]
+    pub trait IntoSizedStreamWithProgress<B> {
+        fn into_stream_with_progress(self, size: u64, observer: ProgressObserver) -> B;
+    }
+    #[cfg(any(feature = "blocking-stream", feature = "async-stream"))]
+    pub trait IntoUnsizedStreamWithProgress<B> {
+        fn into_stream_with_progress(self, observer: ProgressObserver) -> B;
     }
 }
 
@@ -265,6 +322,20 @@ impl<S> PartBody<S> {
         }
     }
 
+    /// Constructs a streaming part body that reports upload progress.
+    #[cfg(any(feature = "blocking-stream", feature = "async-stream"))]
+    pub fn stream_with_progress(
+        stream: impl private::IntoSizedStreamWithProgress<S>,
+        content_length: u64,
+        observer: impl Fn(crate::TransferProgress) + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            inner: PartBodyImpl::Stream(
+                stream.into_stream_with_progress(content_length, Box::new(observer)),
+            ),
+        }
+    }
+
     /// Constructs a part body from a non-seekable stream.
     ///
     /// `stream` must implement [`Read`](std::io::Read) + `'static` for
@@ -277,6 +348,17 @@ impl<S> PartBody<S> {
     pub fn stream_unsized(stream: impl private::IntoUnsizedStream<S>) -> Self {
         Self {
             inner: PartBodyImpl::Stream(stream.into_stream()),
+        }
+    }
+
+    /// Constructs a non-seekable streaming part body that reports upload progress.
+    #[cfg(any(feature = "blocking-stream", feature = "async-stream"))]
+    pub fn stream_unsized_with_progress(
+        stream: impl private::IntoUnsizedStreamWithProgress<S>,
+        observer: impl Fn(crate::TransferProgress) + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            inner: PartBodyImpl::Stream(stream.into_stream_with_progress(Box::new(observer))),
         }
     }
 }

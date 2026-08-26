@@ -41,16 +41,25 @@ On top of the `nyquest-interface` crate and backend crates, the `nyquest` crate 
 
 ## Streaming progress
 
-Streaming responses can report the number of bytes delivered to the caller without buffering the
-entire body:
+Streaming request and response bodies can report transfer progress without buffering the entire
+body:
 
 ```rust,ignore
 let mut body = response.into_async_read_with_progress(|progress| {
     println!("{} of {:?} bytes", progress.transferred, progress.total);
 });
+
+let upload = nyquest::r#async::Body::stream_with_progress(
+    source,
+    "application/octet-stream",
+    content_length,
+    |progress| println!("{} of {:?} bytes", progress.transferred, progress.total),
+);
 ```
 
-Progress follows consumer reads and therefore respects stream backpressure.
+Download progress follows consumer reads. Upload progress follows source reads made by the backend.
+Both therefore respect stream backpressure. Seekable upload progress tracks the current source
+position, including when a backend rewinds the stream.
 
 ## Package Structure
 

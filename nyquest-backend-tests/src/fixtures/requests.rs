@@ -278,11 +278,25 @@ mod tests {
         {
             let builder = crate::init_builder_blocking().unwrap();
             let client = builder.build_blocking().unwrap();
-            let body = NyquestBlockingBody::stream(Cursor::new(CONTENTS), CONTENT_TYPE, 10);
+            let observed = Arc::new(std::sync::Mutex::new(Vec::new()));
+            let observed_by_callback = Arc::clone(&observed);
+            let body = NyquestBlockingBody::stream_with_progress(
+                Cursor::new(CONTENTS),
+                CONTENT_TYPE,
+                10,
+                move |progress| observed_by_callback.lock().unwrap().push(progress),
+            );
             let response = client
                 .request(NyquestRequest::put(PATH).with_body(body))
                 .unwrap();
             assert_eq!(response.status(), 200);
+            assert_eq!(
+                observed.lock().unwrap().last(),
+                Some(&nyquest::TransferProgress {
+                    transferred: 10,
+                    total: Some(10),
+                })
+            );
         }
 
         #[cfg(feature = "async-stream")]
@@ -290,16 +304,26 @@ mod tests {
             TOKIO_RT.block_on(async {
                 let builder = crate::init_builder().await.unwrap();
                 let client = builder.build_async().await.unwrap();
-                let body = NyquestAsyncBody::stream(
+                let observed = Arc::new(std::sync::Mutex::new(Vec::new()));
+                let observed_by_callback = Arc::clone(&observed);
+                let body = NyquestAsyncBody::stream_with_progress(
                     futures_util::io::Cursor::new(CONTENTS),
                     CONTENT_TYPE,
                     10,
+                    move |progress| observed_by_callback.lock().unwrap().push(progress),
                 );
                 let response = client
                     .request(NyquestRequest::put(PATH).with_body(body))
                     .await
                     .unwrap();
                 assert_eq!(response.status(), 200);
+                assert_eq!(
+                    observed.lock().unwrap().last(),
+                    Some(&nyquest::TransferProgress {
+                        transferred: 10,
+                        total: Some(10),
+                    })
+                );
             });
         }
     }
