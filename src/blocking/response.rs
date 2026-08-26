@@ -4,7 +4,9 @@ use nyquest_interface::blocking::AnyBlockingResponse;
 
 #[cfg(feature = "blocking-stream")]
 use super::ReadStream;
-use crate::{StatusCode, TransferProgress};
+use crate::StatusCode;
+#[cfg(feature = "blocking-stream")]
+use crate::TransferProgress;
 
 /// A blocking HTTP response.
 pub struct Response {
