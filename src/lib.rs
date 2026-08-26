@@ -120,6 +120,7 @@
 
 mod body;
 mod error;
+mod progress;
 mod request;
 
 #[cfg(feature = "async")]
@@ -142,6 +143,7 @@ pub use body::{Part, PartBody};
 #[doc(inline)]
 pub use client::ClientBuilder;
 pub use error::{Error, Result};
+pub use progress::TransferProgress;
 #[cfg(feature = "async")]
 #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
 pub use r#async::client::AsyncClient;
