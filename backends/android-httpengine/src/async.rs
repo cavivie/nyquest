@@ -24,7 +24,7 @@ pub struct AndroidAsyncClient {
 impl fmt::Debug for AndroidAsyncClient {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("AndroidAsyncClient")
-            .field(&self.core.bindings.name)
+            .field(&"HttpEngine")
             .finish()
     }
 }

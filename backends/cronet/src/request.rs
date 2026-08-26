@@ -3,13 +3,15 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
-use jni::objects::{JClass, JValue};
-use jni::sys::JNI_TRUE;
+use crate::bindings::io::nyquest::cronet::{
+    NativeUrlRequestCallback, NativeUrlRequestCallbackByteArrayUploadProvider,
+};
+use crate::bindings::org::chromium::net::{UploadDataProvider, UrlRequestCallback};
 use nyquest_interface::client::{CachingBehavior, ClientOptions};
 use nyquest_interface::{Error, Method, Result};
 
 use crate::backend::BackendCore;
-use crate::error::{java_error, jni_io, Failure};
+use crate::error::{jni_io, Failure};
 use crate::state::{finish_request, registry_lock, RequestGuard, RequestState, NEXT_REQUEST_ID};
 
 #[derive(Clone)]
@@ -125,142 +127,45 @@ impl BackendCore {
         state: &Arc<RequestState>,
         prepared: PreparedRequest,
     ) -> Result<()> {
-        let mut env = self
-            .vm
-            .attach_current_thread()
-            .map_err(|error| jni_io("failed to attach to JVM", error))?;
-        let callback_class: &JClass<'_> = self.callback_class.as_obj().into();
-        let callback = env
-            .new_object(
-                callback_class,
-                self.bindings.callback_constructor,
-                &[JValue::Long(id)],
-            )
-            .map_err(|error| java_error(&mut env, "failed to create Android callback", error))?;
-        let url = env
-            .new_string(&prepared.url)
-            .map_err(|error| java_error(&mut env, "failed to allocate request URL", error))?;
-        let callback_obj = callback;
-        let builder = if self.bindings.callback_before_executor {
-            env.call_method(
-                self.engine.as_obj(),
-                "newUrlRequestBuilder",
-                self.bindings.engine_builder_signature,
-                &[
-                    JValue::Object(url.as_ref()),
-                    JValue::Object(&callback_obj),
-                    JValue::Object(self.executor.as_obj()),
-                ],
-            )
-        } else {
-            env.call_method(
-                self.engine.as_obj(),
-                "newUrlRequestBuilder",
-                self.bindings.engine_builder_signature,
-                &[
-                    JValue::Object(url.as_ref()),
-                    JValue::Object(self.executor.as_obj()),
-                    JValue::Object(&callback_obj),
-                ],
-            )
-        }
-        .and_then(|value| value.l())
-        .map_err(|error| java_error(&mut env, "failed to create Android request builder", error))?;
+        self.vm
+            .attach_current_thread(|env| -> jni::errors::Result<()> {
+                let callback = NativeUrlRequestCallback::new(env, id)?;
+                let url = env.new_string(&prepared.url)?;
+                let builder = self.engine.new_url_request_builder(
+                    env,
+                    &url,
+                    <NativeUrlRequestCallback<'_> as AsRef<UrlRequestCallback<'_>>>::as_ref(
+                        &callback,
+                    ),
+                    self.executor.as_obj(),
+                )?;
 
-        let method = env
-            .new_string(&prepared.method)
-            .map_err(|error| java_error(&mut env, "failed to allocate HTTP method", error))?;
-        let builder_return = format!("(Ljava/lang/String;)L{};", self.bindings.builder_class);
-        env.call_method(
-            &builder,
-            "setHttpMethod",
-            &builder_return,
-            &[JValue::Object(method.as_ref())],
-        )
-        .map_err(|error| java_error(&mut env, "failed to set HTTP method", error))?;
+                let method = env.new_string(&prepared.method)?;
+                builder.set_http_method(env, &method)?;
 
-        let header_return = format!(
-            "(Ljava/lang/String;Ljava/lang/String;)L{};",
-            self.bindings.builder_class
-        );
-        for (name, value) in prepared.headers {
-            let name = env
-                .new_string(name)
-                .map_err(|error| java_error(&mut env, "failed to allocate header name", error))?;
-            let value = env
-                .new_string(value)
-                .map_err(|error| java_error(&mut env, "failed to allocate header value", error))?;
-            env.call_method(
-                &builder,
-                "addHeader",
-                &header_return,
-                &[
-                    JValue::Object(name.as_ref()),
-                    JValue::Object(value.as_ref()),
-                ],
-            )
-            .map_err(|error| java_error(&mut env, "failed to add request header", error))?;
-        }
+                for (name, value) in prepared.headers {
+                    let name = env.new_string(name)?;
+                    let value = env.new_string(value)?;
+                    builder.add_header(env, &name, &value)?;
+                }
 
-        if prepared.disable_cache {
-            let arguments = [JValue::Bool(JNI_TRUE)];
-            let arguments = if self.bindings.disable_cache_takes_boolean {
-                &arguments[..]
-            } else {
-                &[]
-            };
-            env.call_method(
-                &builder,
-                self.bindings.disable_cache_method,
-                self.bindings.disable_cache_signature,
-                arguments,
-            )
-            .map_err(|error| java_error(&mut env, "failed to disable request cache", error))?;
-        }
+                if prepared.disable_cache {
+                    builder.disable_cache(env)?;
+                }
 
-        if let Some(body) = prepared.body {
-            let bytes = env
-                .byte_array_from_slice(&body)
-                .map_err(|error| java_error(&mut env, "failed to allocate upload body", error))?;
-            let upload_class: &JClass<'_> = self.upload_provider_class.as_obj().into();
-            let upload = env
-                .new_object(upload_class, "([B)V", &[JValue::Object(bytes.as_ref())])
-                .map_err(|error| java_error(&mut env, "failed to create upload provider", error))?;
-            let signature = format!(
-                "({}Ljava/util/concurrent/Executor;)L{};",
-                self.bindings.upload_provider_signature, self.bindings.builder_class
-            );
-            env.call_method(
-                &builder,
-                "setUploadDataProvider",
-                &signature,
-                &[
-                    JValue::Object(&upload),
-                    JValue::Object(self.executor.as_obj()),
-                ],
-            )
-            .map_err(|error| java_error(&mut env, "failed to set upload provider", error))?;
-        }
+                if let Some(body) = prepared.body {
+                    let bytes = env.byte_array_from_slice(&body)?;
+                    let upload = NativeUrlRequestCallbackByteArrayUploadProvider::new(env, &bytes)?;
+                    let upload: UploadDataProvider<'_> = upload.into();
+                    builder.set_upload_data_provider(env, &upload, self.executor.as_obj())?;
+                }
 
-        let request_signature = format!("()L{};", self.bindings.request_class);
-        let request = env
-            .call_method(&builder, "build", &request_signature, &[])
-            .and_then(|value| value.l())
-            .map_err(|error| java_error(&mut env, "failed to build Android request", error))?;
-        let set_request_signature = format!("(L{};)V", self.bindings.request_class);
-        env.call_method(
-            &callback_obj,
-            "setRequest",
-            &set_request_signature,
-            &[JValue::Object(&request)],
-        )
-        .map_err(|error| java_error(&mut env, "failed to retain Android request", error))?;
-        state.lock().callback =
-            Some(env.new_global_ref(&callback_obj).map_err(|error| {
-                java_error(&mut env, "failed to retain Android callback", error)
-            })?);
-        env.call_method(&request, "start", "()V", &[])
-            .map_err(|error| java_error(&mut env, "failed to start Android request", error))?;
-        Ok(())
+                let request = builder.build(env)?;
+                callback.set_request(env, &request)?;
+                state.lock().callback = Some(env.new_global_ref(&callback)?);
+                request.start(env)?;
+                Ok(())
+            })
+            .map_err(|error| jni_io("failed to start Cronet request", error))
     }
 }

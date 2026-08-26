@@ -13,6 +13,8 @@ older Android versions must check availability before constructing this backend 
 different backend, such as `nyquest-backend-cronet`, for those devices.
 
 Add the Java adapter under `android/src/main/java` to the Android application source set. The
+Rust JNI bindings are generated automatically by `build.rs` from the adapter and the minimal Java
+API declarations under `android/api`; generated Rust source is not checked in. The
 backend supports async and blocking clients, buffered uploads, streaming downloads, cancellation,
 redirects, and request timeouts. Rust streaming upload sources are collected before the Java
 request starts in this initial implementation.
@@ -26,4 +28,3 @@ request starts in this initial implementation.
 
 [`android.net.http.HttpEngine`]: https://developer.android.com/reference/android/net/http/HttpEngine
 [`nyquest`]: https://docs.rs/nyquest
-

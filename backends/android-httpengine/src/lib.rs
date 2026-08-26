@@ -9,6 +9,10 @@
 mod r#async;
 #[cfg(target_os = "android")]
 mod backend;
+#[cfg(target_os = "android")]
+mod bindings {
+    include!(concat!(env!("OUT_DIR"), "/android_bindings.rs"));
+}
 #[cfg(all(target_os = "android", feature = "blocking"))]
 mod blocking;
 #[cfg(target_os = "android")]
@@ -23,9 +27,9 @@ mod response;
 mod state;
 
 #[cfg(target_os = "android")]
-use backend::{AndroidBackend, BackendBindings};
+use backend::AndroidBackend;
 #[cfg(target_os = "android")]
-use jni::{objects::JObject, JNIEnv};
+use jni::{objects::JObject, Env};
 
 /// The backend implementation using an application-provided `android.net.http.HttpEngine`.
 #[derive(Clone)]
@@ -41,12 +45,12 @@ impl HttpEngineBackend {
     /// `HttpEngine` is available on Android API 34 or Android S extension 7. The application owns
     /// availability checks and engine configuration before constructing this backend.
     pub fn new(
-        env: &mut JNIEnv<'_>,
+        env: &mut Env<'_>,
         engine: &JObject<'_>,
         executor: &JObject<'_>,
     ) -> jni::errors::Result<Self> {
         Ok(Self {
-            inner: AndroidBackend::new(env, engine, executor, HTTP_ENGINE_BINDINGS)?,
+            inner: AndroidBackend::new(env, engine, executor)?,
         })
     }
 }
@@ -80,19 +84,3 @@ impl nyquest_interface::blocking::BlockingBackend for HttpEngineBackend {
         self.inner.create_blocking_client(options)
     }
 }
-
-#[cfg(target_os = "android")]
-const HTTP_ENGINE_BINDINGS: BackendBindings = BackendBindings {
-    name: "AndroidHttpEngine",
-    callback_class: "io/nyquest/httpengine/NativeUrlRequestCallback",
-    callback_constructor: "(J)V",
-    engine_builder_signature: "(Ljava/lang/String;Ljava/util/concurrent/Executor;Landroid/net/http/UrlRequest$Callback;)Landroid/net/http/UrlRequest$Builder;",
-    callback_before_executor: false,
-    builder_class: "android/net/http/UrlRequest$Builder",
-    request_class: "android/net/http/UrlRequest",
-    upload_provider_class: "io/nyquest/httpengine/NativeUrlRequestCallback$ByteArrayUploadProvider",
-    upload_provider_signature: "Landroid/net/http/UploadDataProvider;",
-    disable_cache_method: "setCacheDisabled",
-    disable_cache_signature: "(Z)Landroid/net/http/UrlRequest$Builder;",
-    disable_cache_takes_boolean: true,
-};

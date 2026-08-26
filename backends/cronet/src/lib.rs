@@ -9,6 +9,10 @@
 mod r#async;
 #[cfg(target_os = "android")]
 mod backend;
+#[cfg(target_os = "android")]
+mod bindings {
+    include!(concat!(env!("OUT_DIR"), "/android_bindings.rs"));
+}
 #[cfg(all(target_os = "android", feature = "blocking"))]
 mod blocking;
 #[cfg(target_os = "android")]
@@ -23,9 +27,9 @@ mod response;
 mod state;
 
 #[cfg(target_os = "android")]
-use backend::{AndroidBackend, BackendBindings};
+use backend::AndroidBackend;
 #[cfg(target_os = "android")]
-use jni::{objects::JObject, JNIEnv};
+use jni::{objects::JObject, Env};
 
 /// The backend implementation using an application-provided Cronet engine.
 #[derive(Clone)]
@@ -41,12 +45,12 @@ impl CronetBackend {
     /// The application owns provider selection and engine configuration. Both Java objects are
     /// retained as global JNI references for the lifetime of this backend.
     pub fn new(
-        env: &mut JNIEnv<'_>,
+        env: &mut Env<'_>,
         engine: &JObject<'_>,
         executor: &JObject<'_>,
     ) -> jni::errors::Result<Self> {
         Ok(Self {
-            inner: AndroidBackend::new(env, engine, executor, CRONET_BINDINGS)?,
+            inner: AndroidBackend::new(env, engine, executor)?,
         })
     }
 }
@@ -80,19 +84,3 @@ impl nyquest_interface::blocking::BlockingBackend for CronetBackend {
         self.inner.create_blocking_client(options)
     }
 }
-
-#[cfg(target_os = "android")]
-const CRONET_BINDINGS: BackendBindings = BackendBindings {
-    name: "Cronet",
-    callback_class: "io/nyquest/cronet/NativeUrlRequestCallback",
-    callback_constructor: "(J)V",
-    engine_builder_signature: "(Ljava/lang/String;Lorg/chromium/net/UrlRequest$Callback;Ljava/util/concurrent/Executor;)Lorg/chromium/net/UrlRequest$Builder;",
-    callback_before_executor: true,
-    builder_class: "org/chromium/net/UrlRequest$Builder",
-    request_class: "org/chromium/net/UrlRequest",
-    upload_provider_class: "io/nyquest/cronet/NativeUrlRequestCallback$ByteArrayUploadProvider",
-    upload_provider_signature: "Lorg/chromium/net/UploadDataProvider;",
-    disable_cache_method: "disableCache",
-    disable_cache_signature: "()Lorg/chromium/net/UrlRequest$Builder;",
-    disable_cache_takes_boolean: false,
-};

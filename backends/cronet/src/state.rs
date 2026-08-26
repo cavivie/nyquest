@@ -7,11 +7,12 @@ use std::sync::{Arc, Condvar, Mutex, MutexGuard, OnceLock};
 use std::task::Poll;
 use std::task::Waker;
 
-use jni::objects::GlobalRef;
+use jni::objects::Global;
 use jni::sys::jlong;
 use jni::JavaVM;
 use nyquest_interface::Result;
 
+use crate::bindings::io::nyquest::cronet::NativeUrlRequestCallback;
 use crate::error::{clear_java_exception, java_failure, Failure};
 
 #[derive(Clone)]
@@ -39,7 +40,7 @@ pub(crate) struct RequestState {
 
 pub(crate) struct RequestStateData {
     pub(crate) metadata: Option<ResponseMetadata>,
-    pub(crate) callback: Option<GlobalRef>,
+    pub(crate) callback: Option<Global<NativeUrlRequestCallback<'static>>>,
     pub(crate) chunks: VecDeque<Vec<u8>>,
     pub(crate) terminal: Option<std::result::Result<(), Failure>>,
     pub(crate) response_waker: Option<Waker>,
@@ -92,27 +93,28 @@ impl RequestState {
     }
 
     pub(crate) fn cancel_java(&self) {
-        let callback = self.lock().callback.clone();
-        let Some(callback) = callback else { return };
-        if let Ok(mut env) = self.vm.attach_current_thread() {
-            let _ = env.call_method(callback.as_obj(), "cancel", "()V", &[]);
-            clear_java_exception(&mut env);
-        }
+        let data = self.lock();
+        let Some(callback) = data.callback.as_ref() else {
+            return;
+        };
+        let _ = self.vm.attach_current_thread(|env| {
+            let result = callback.cancel(env);
+            clear_java_exception(env);
+            result
+        });
     }
 
     pub(crate) fn request_read(&self) -> std::result::Result<(), Failure> {
-        let callback = self
-            .lock()
+        let data = self.lock();
+        let callback = data
             .callback
-            .clone()
+            .as_ref()
             .ok_or_else(|| Failure::Io("Android request callback is unavailable".into()))?;
-        let mut env = self
-            .vm
-            .attach_current_thread()
-            .map_err(|error| Failure::Io(format!("failed to attach to JVM: {error}")))?;
-        env.call_method(callback.as_obj(), "read", "()V", &[])
-            .map_err(|error| java_failure(&mut env, "failed to read Android response", error))?;
-        Ok(())
+        self.vm.attach_current_thread(|env| {
+            callback
+                .read(env)
+                .map_err(|error| java_failure(env, "failed to read Android response", error))
+        })
     }
 }
 

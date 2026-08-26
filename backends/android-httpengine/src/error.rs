@@ -1,12 +1,18 @@
 use std::io;
 
-use jni::JNIEnv;
+use jni::Env;
 use nyquest_interface::Error;
 
 #[derive(Clone)]
 pub(crate) enum Failure {
     Timeout,
     Io(String),
+}
+
+impl From<jni::errors::Error> for Failure {
+    fn from(error: jni::errors::Error) -> Self {
+        Self::Io(format!("Android JNI call failed: {error}"))
+    }
 }
 
 impl Failure {
@@ -18,34 +24,15 @@ impl Failure {
     }
 }
 
-pub(crate) fn java_error(env: &mut JNIEnv<'_>, context: &str, error: jni::errors::Error) -> Error {
-    Error::Io(io::Error::other(
-        java_failure(env, context, error).message(),
-    ))
-}
-
-pub(crate) fn java_failure(
-    env: &mut JNIEnv<'_>,
-    context: &str,
-    error: jni::errors::Error,
-) -> Failure {
+pub(crate) fn java_failure(env: &mut Env<'_>, context: &str, error: jni::errors::Error) -> Failure {
     clear_java_exception(env);
     Failure::Io(format!("{context}: {error}"))
 }
 
-impl Failure {
-    pub(crate) fn message(self) -> String {
-        match self {
-            Self::Timeout => "request timed out".into(),
-            Self::Io(message) => message,
-        }
-    }
-}
-
-pub(crate) fn clear_java_exception(env: &mut JNIEnv<'_>) {
-    if env.exception_check().unwrap_or(false) {
-        let _ = env.exception_describe();
-        let _ = env.exception_clear();
+pub(crate) fn clear_java_exception(env: &mut Env<'_>) {
+    if env.exception_check() {
+        env.exception_describe();
+        env.exception_clear();
     }
 }
 

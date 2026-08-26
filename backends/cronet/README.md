@@ -10,6 +10,8 @@ provider, then passes its `org.chromium.net.CronetEngine` and callback `Executor
 
 Add the Java adapter under `android/src/main/java` to the Android application source set and add
 the desired Cronet implementation, for example `org.chromium.net:cronet-embedded`.
+Rust JNI bindings are generated automatically by `build.rs` from the adapter and the minimal Java
+API declarations under `android/api`; generated Rust source is not checked in.
 
 The backend supports async and blocking clients, buffered uploads, streaming downloads,
 cancellation, redirects, and request timeouts. Rust streaming upload sources are collected before

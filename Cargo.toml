@@ -15,7 +15,7 @@ edition = "2021"
 keywords = ["http", "client", "native", "winhttp", "nsurlsession"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/bdbai/nyquest"
-rust-version = "1.80"
+rust-version = "1.85"
 exclude = [".vscode/*", ".github/*", "examples/README.md", "rustfmt.toml"]
 
 [workspace.dependencies]

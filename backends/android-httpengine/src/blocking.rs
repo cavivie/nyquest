@@ -20,7 +20,7 @@ pub struct AndroidBlockingClient {
 impl fmt::Debug for AndroidBlockingClient {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("AndroidBlockingClient")
-            .field(&self.core.bindings.name)
+            .field(&"HttpEngine")
             .finish()
     }
 }
