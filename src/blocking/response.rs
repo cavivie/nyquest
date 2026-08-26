@@ -4,7 +4,7 @@ use nyquest_interface::blocking::AnyBlockingResponse;
 
 #[cfg(feature = "blocking-stream")]
 use super::ReadStream;
-use crate::StatusCode;
+use crate::{StatusCode, TransferProgress};
 
 /// A blocking HTTP response.
 pub struct Response {
@@ -82,7 +82,22 @@ impl Response {
     #[cfg(feature = "blocking-stream")]
     #[cfg_attr(docsrs, doc(cfg(feature = "blocking-stream")))]
     pub fn into_read(self) -> ReadStream {
-        ReadStream::new(self.inner)
+        let total = self.content_length();
+        ReadStream::new(self.inner, total, None)
+    }
+
+    /// Turn the response body into a [`std::io::Read`] stream that reports progress.
+    ///
+    /// The observer is called after bytes are delivered to the caller. It runs on the reading
+    /// thread and is not called for zero-length reads or errors.
+    #[cfg(feature = "blocking-stream")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "blocking-stream")))]
+    pub fn into_read_with_progress(
+        self,
+        observer: impl Fn(TransferProgress) + Send + Sync + 'static,
+    ) -> ReadStream {
+        let total = self.content_length();
+        ReadStream::new(self.inner, total, Some(Box::new(observer)))
     }
 }
 

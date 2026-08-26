@@ -39,6 +39,19 @@ Meanwhile, you might not need Nyquest if you:
 
 On top of the `nyquest-interface` crate and backend crates, the `nyquest` crate provides a convenient, user-friendly API for Nyquest users, including library authors and end application developers.
 
+## Streaming progress
+
+Streaming responses can report the number of bytes delivered to the caller without buffering the
+entire body:
+
+```rust,ignore
+let mut body = response.into_async_read_with_progress(|progress| {
+    println!("{} of {:?} bytes", progress.transferred, progress.total);
+});
+```
+
+Progress follows consumer reads and therefore respects stream backpressure.
+
 ## Package Structure
 
 - `nyquest`: The main crate that provides a user-friendly HTTP client API.
