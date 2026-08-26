@@ -47,7 +47,7 @@ fn run_test(
         .map_err(|error| format!("failed to build client: {error}"))?;
     let response = client
         .request(nyquest::blocking::Request::get(url))
-        .map_err(|error| format!("request failed: {error}"))?;
+        .map_err(|error| format!("request failed: {error:?}"))?;
     let status = response.status();
     let marker = response
         .get_header("x-nyquest-runtime")
