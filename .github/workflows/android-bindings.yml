@@ -54,7 +54,7 @@ jobs:
           java-version: "17"
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@1.85.0
+        uses: dtolnay/rust-toolchain@1.88.0
         with:
           targets: x86_64-linux-android
 
@@ -67,7 +67,7 @@ jobs:
         run: |
           "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" \
             "platforms;android-34" "ndk;27.2.12479018"
-          cargo install cargo-ndk --version 3.5.4 --locked
+          cargo install cargo-ndk --version 4.1.2 --locked
 
       - name: Build Rust runtime library
         run: |
