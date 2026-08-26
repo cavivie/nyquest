@@ -1,0 +1,30 @@
+[package]
+name = "nyquest-backend-cronet"
+description = "Cronet backend for nyquest"
+version = "0.1.0"
+authors.workspace = true
+categories.workspace = true
+edition.workspace = true
+keywords.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+exclude.workspace = true
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[features]
+async = ["nyquest-interface/async", "nyquest-backend-android-common/async"]
+async-stream = ["async", "nyquest-interface/async-stream", "nyquest-backend-android-common/async-stream"]
+blocking = ["nyquest-interface/blocking", "nyquest-backend-android-common/blocking"]
+blocking-stream = ["blocking", "nyquest-interface/blocking-stream", "nyquest-backend-android-common/blocking-stream"]
+
+[dependencies]
+nyquest-interface = { version = "0.4.0", path = "../../nyquest-interface", default-features = false }
+nyquest-backend-android-common = { version = "0.1.0", path = "../android-common", default-features = false }
+
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.21"
+
