@@ -1308,6 +1308,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "nyquest-backend-android-httpengine"
+version = "0.1.0"
+dependencies = [
+ "jni",
+ "nyquest-backend-android-common",
+ "nyquest-interface",
+]
+
+[[package]]
 name = "nyquest-backend-cronet"
 version = "0.1.0"
 dependencies = [

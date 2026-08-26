@@ -30,6 +30,7 @@ pub struct BackendBindings {
     pub upload_provider_signature: &'static str,
     pub disable_cache_method: &'static str,
     pub disable_cache_signature: &'static str,
+    pub disable_cache_takes_boolean: bool,
 }
 
 #[derive(Clone)]
@@ -820,11 +821,17 @@ impl BackendCore {
         }
 
         if prepared.disable_cache {
+            let arguments = [JValue::Bool(JNI_TRUE)];
+            let arguments = if self.bindings.disable_cache_takes_boolean {
+                &arguments[..]
+            } else {
+                &[]
+            };
             env.call_method(
                 &builder,
                 self.bindings.disable_cache_method,
                 self.bindings.disable_cache_signature,
-                &[],
+                arguments,
             )
             .map_err(|error| java_error(&mut env, "failed to disable request cache", error))?;
         }
