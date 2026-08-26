@@ -159,6 +159,7 @@ jobs:
               echo "Timed out waiting for Android network validation"
               exit 1
             fi
+            sleep 5
           fi
 
           curl --fail --retry 10 --retry-delay 1 \
