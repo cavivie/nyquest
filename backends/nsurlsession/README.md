@@ -14,4 +14,9 @@
 - `async-stream`
 - `multipart`
 
+## Cancellation
+
+Dropping an asynchronous request future before response headers arrive cancels its underlying
+`NSURLSessionDataTask`. After headers arrive, ownership of the task moves to the response.
+
 [`nyquest`]: https://docs.rs/nyquest

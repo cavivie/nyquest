@@ -8,6 +8,9 @@ use crate::StatusCode;
 #[non_exhaustive]
 #[derive(Debug, Error)]
 pub enum Error {
+    /// Neither a client-specific nor global backend is configured.
+    #[error("No backend configured")]
+    NoBackendConfigured,
     /// The backend does not recognize the input as a valid URL.
     #[error("Invalid URL")]
     InvalidUrl,

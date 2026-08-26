@@ -242,7 +242,11 @@ mod tests {
                 .try_send(Ok(Frame::data(Bytes::from_static(&[0; 512]))))
                 .unwrap();
             let res = client.request(NyquestRequest::get(PATH)).unwrap();
-            let mut read = res.into_read();
+            let observed = Arc::new(std::sync::Mutex::new(Vec::new()));
+            let observed_by_callback = Arc::clone(&observed);
+            let mut read = res.into_read_with_progress(move |progress| {
+                observed_by_callback.lock().unwrap().push(progress);
+            });
             read.read_exact(&mut [0; 512]).unwrap();
             blocking_tx
                 .try_send(Ok(Frame::data(Bytes::from_static(b"1"))))
@@ -259,6 +263,13 @@ mod tests {
             assert_eq!((read.read(&mut buf).unwrap(), buf[0]), (1, b'3'));
             drop(blocking_tx);
             assert_eq!(read.read(&mut buf).unwrap(), 0);
+            assert_eq!(
+                observed.lock().unwrap().last(),
+                Some(&nyquest::TransferProgress {
+                    transferred: 515,
+                    total: None,
+                })
+            );
         }
         #[cfg(feature = "async-stream")]
         {
@@ -273,7 +284,11 @@ mod tests {
                     .try_send(Ok(Frame::data(Bytes::from_static(&[0; 512]))))
                     .unwrap();
                 let res = client.request(NyquestRequest::get(PATH)).await.unwrap();
-                let mut read = res.into_async_read();
+                let observed = Arc::new(std::sync::Mutex::new(Vec::new()));
+                let observed_by_callback = Arc::clone(&observed);
+                let mut read = res.into_async_read_with_progress(move |progress| {
+                    observed_by_callback.lock().unwrap().push(progress);
+                });
                 read.read_exact(&mut [0; 512]).await.unwrap();
                 async_tx
                     .try_send(Ok(Frame::data(Bytes::from_static(b"1"))))
@@ -290,6 +305,13 @@ mod tests {
                 assert_eq!((read.read(&mut buf).await.unwrap(), buf[0]), (1, b'3'));
                 drop(async_tx);
                 assert_eq!(read.read(&mut buf).await.unwrap(), 0);
+                assert_eq!(
+                    observed.lock().unwrap().last(),
+                    Some(&nyquest::TransferProgress {
+                        transferred: 515,
+                        total: None,
+                    })
+                );
             });
         }
     }

@@ -21,17 +21,21 @@ pub struct AsyncClient {
 impl ClientBuilder {
     /// Build a new async client with the given options.
     ///
-    /// # Panic
+    /// # Errors
     ///
-    /// Panics if no backend is registered.
+    /// Returns [`crate::Error::NoBackendConfigured`] if neither a client-specific nor global
+    /// backend is configured.
     pub async fn build_async(self) -> crate::Result<AsyncClient> {
-        Ok(AsyncClient {
-            client: BACKEND
+        let client = if let Some(backend) = self.async_backend {
+            backend.create_async_client(self.options).await?
+        } else {
+            BACKEND
                 .get()
-                .expect("No backend registered. Please find a backend crate (e.g. nyquest-preset) and call the `register` method at program startup.")
+                .ok_or(crate::Error::NoBackendConfigured)?
                 .create_async_client(self.options)
                 .await?
-        })
+        };
+        Ok(AsyncClient { client })
     }
 }
 

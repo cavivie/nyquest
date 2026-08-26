@@ -28,16 +28,20 @@ pub struct BlockingClient {
 impl ClientBuilder {
     /// Build a new blocking client with the given options.
     ///
-    /// # Panic
+    /// # Errors
     ///
-    /// Panics if no backend is registered.
+    /// Returns [`crate::Error::NoBackendConfigured`] if neither a client-specific nor global
+    /// backend is configured.
     pub fn build_blocking(self) -> crate::Result<BlockingClient> {
-        Ok(BlockingClient {
-            client: BACKEND
+        let client = if let Some(backend) = self.blocking_backend {
+            backend.create_blocking_client(self.options)?
+        } else {
+            BACKEND
                 .get()
-                .expect("No backend registered. Please find a backend crate (e.g. nyquest-preset) and call the `register` method at program startup.")
-                .create_blocking_client(self.options)?,
-        })
+                .ok_or(crate::Error::NoBackendConfigured)?
+                .create_blocking_client(self.options)?
+        };
+        Ok(BlockingClient { client })
     }
 }
 

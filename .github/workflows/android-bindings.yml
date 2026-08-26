@@ -1,0 +1,196 @@
+name: Android runtime
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - backend: cronet
+            api: 24
+            min_api: 24
+            gradle_task: assembleCronetDebug
+            apk: app/build/outputs/apk/cronet/debug/app-cronet-debug.apk
+          - backend: cronet
+            api: 36
+            min_api: 24
+            gradle_task: assembleCronetDebug
+            apk: app/build/outputs/apk/cronet/debug/app-cronet-debug.apk
+          - backend: httpengine
+            api: 34
+            min_api: 34
+            gradle_task: assembleHttpengineDebug
+            apk: app/build/outputs/apk/httpengine/debug/app-httpengine-debug.apk
+          - backend: httpengine
+            api: 36
+            min_api: 34
+            gradle_task: assembleHttpengineDebug
+            apk: app/build/outputs/apk/httpengine/debug/app-httpengine-debug.apk
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          targets: x86_64-linux-android
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.10.2"
+
+      - name: Install Android build dependencies
+        run: |
+          "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" --list_installed
+          "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" \
+            "platforms;android-34" \
+            "ndk;27.2.12479018" \
+            "emulator" \
+            "system-images;android-${{ matrix.api }};google_apis;x86_64"
+          "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" --list_installed
+          cargo install cargo-ndk --version 4.1.2 --locked
+
+      - name: Build Rust runtime library
+        run: |
+          export ANDROID_NDK_HOME="${ANDROID_HOME}/ndk/27.2.12479018"
+          cargo ndk \
+            --target x86_64 \
+            --platform ${{ matrix.min_api }} \
+            --output-dir nyquest-backend-tests/android/app/src/main/jniLibs \
+            build --release --locked \
+            -p nyquest-backend-tests-android \
+            --no-default-features \
+            --features ${{ matrix.backend }}
+
+      - name: Build Android app
+        run: |
+          gradle --project-dir nyquest-backend-tests/android \
+            ${{ matrix.gradle_task }} --no-daemon --stacktrace
+
+      - name: Run ${{ matrix.backend }} on Android ${{ matrix.api }}
+        run: |
+          avd_name="nyquest-${{ matrix.backend }}-${{ matrix.api }}"
+          emulator_log="${RUNNER_TEMP}/${avd_name}-emulator.log"
+          adb_bin="${ANDROID_HOME}/platform-tools/adb"
+          export ANDROID_AVD_HOME="${RUNNER_TEMP}/android-avd"
+          mkdir -p "${ANDROID_AVD_HOME}"
+
+          echo no | "${ANDROID_HOME}/cmdline-tools/latest/bin/avdmanager" \
+            create avd --force \
+            --name "${avd_name}" \
+            --package "system-images;android-${{ matrix.api }};google_apis;x86_64" \
+            --device pixel_2
+
+          "${ANDROID_HOME}/emulator/emulator" \
+            -avd "${avd_name}" \
+            -no-window -gpu swiftshader_indirect -no-snapshot \
+            -noaudio -no-boot-anim -camera-back none \
+            >"${emulator_log}" 2>&1 &
+          emulator_pid=$!
+
+          python3 nyquest-backend-tests/android/server.py &
+          server_pid=$!
+
+          cleanup() {
+            "${adb_bin}" emu kill >/dev/null 2>&1 || true
+            kill "${server_pid}" >/dev/null 2>&1 || true
+            kill "${emulator_pid}" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          boot_completed=""
+          for attempt in $(seq 1 90); do
+            boot_completed=$(timeout 5 "${adb_bin}" shell getprop sys.boot_completed 2>/dev/null || true)
+            if [ "${boot_completed}" = "1" ]; then
+              break
+            fi
+            if ! kill -0 "${emulator_pid}" 2>/dev/null; then
+              cat "${emulator_log}"
+              echo "Android emulator exited before boot completed"
+              exit 1
+            fi
+            sleep 2
+          done
+
+          if [ "${boot_completed}" != "1" ]; then
+            cat "${emulator_log}"
+            "${adb_bin}" devices -l
+            echo "Timed out waiting for the Android emulator to boot"
+            exit 1
+          fi
+
+          if [ "${{ matrix.backend }}" = "httpengine" ]; then
+            network_ready=""
+            for attempt in $(seq 1 60); do
+              connectivity=$(timeout 5 "${adb_bin}" shell dumpsys connectivity || true)
+              if echo "${connectivity}" | grep -q 'VALIDATED'; then
+                network_ready="1"
+                break
+              fi
+              sleep 1
+            done
+            if [ "${network_ready}" != "1" ]; then
+              "${adb_bin}" shell dumpsys connectivity
+              echo "Timed out waiting for Android network validation"
+              exit 1
+            fi
+            sleep 5
+          fi
+
+          curl --fail --retry 10 --retry-delay 1 \
+            http://127.0.0.1:8765/runtime
+
+          "${adb_bin}" shell settings put global window_animation_scale 0.0
+          "${adb_bin}" shell settings put global transition_animation_scale 0.0
+          "${adb_bin}" shell settings put global animator_duration_scale 0.0
+          "${adb_bin}" logcat -c
+          "${adb_bin}" install -r "nyquest-backend-tests/android/${{ matrix.apk }}"
+          "${adb_bin}" shell am start -W \
+            -n io.nyquest.runtime/.RuntimeTestActivity
+
+          for attempt in $(seq 1 60); do
+            logs=$(timeout 5 "${adb_bin}" logcat -d \
+              -s NyquestRuntime:I AndroidRuntime:E '*:S' || true)
+            if echo "${logs}" | grep -q 'NYQUEST_RUNTIME_FAIL'; then
+              echo "${logs}"
+              exit 1
+            fi
+            if echo "${logs}" | grep -q 'FATAL EXCEPTION'; then
+              echo "${logs}"
+              exit 1
+            fi
+            if echo "${logs}" | grep -q 'NYQUEST_RUNTIME_PASS'; then
+              echo "${logs}"
+              exit 0
+            fi
+            sleep 2
+          done
+
+          "${adb_bin}" logcat -d -s NyquestRuntime:I AndroidRuntime:E '*:S'
+          echo "Timed out waiting for the Nyquest runtime result"
+          exit 1

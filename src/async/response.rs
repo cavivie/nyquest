@@ -8,6 +8,8 @@ use nyquest_interface::r#async::AnyAsyncResponse;
 #[cfg(feature = "async-stream")]
 use super::AsyncReadStream;
 use crate::StatusCode;
+#[cfg(feature = "async-stream")]
+use crate::TransferProgress;
 
 /// An async HTTP response.
 pub struct Response {
@@ -84,7 +86,22 @@ impl Response {
     #[cfg(feature = "async-stream")]
     #[cfg_attr(docsrs, doc(cfg(feature = "async-stream")))]
     pub fn into_async_read(self) -> AsyncReadStream {
-        AsyncReadStream::new(self.inner)
+        let total = self.content_length();
+        AsyncReadStream::new(self.inner, total, None)
+    }
+
+    /// Turn the response body into a [`futures_io::AsyncRead`] stream that reports progress.
+    ///
+    /// The observer is called after bytes are delivered to the caller. It runs on the thread that
+    /// polls the stream and is not called for zero-length reads or errors.
+    #[cfg(feature = "async-stream")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "async-stream")))]
+    pub fn into_async_read_with_progress(
+        self,
+        observer: impl Fn(TransferProgress) + Send + Sync + 'static,
+    ) -> AsyncReadStream {
+        let total = self.content_length();
+        AsyncReadStream::new(self.inner, total, Some(Box::new(observer)))
     }
 }
 

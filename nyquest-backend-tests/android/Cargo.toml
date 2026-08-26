@@ -1,0 +1,19 @@
+[package]
+name = "nyquest-backend-tests-android"
+version = "0.0.0"
+edition = "2021"
+rust-version.workspace = true
+publish = false
+
+[features]
+cronet = ["dep:nyquest-backend-cronet"]
+httpengine = ["dep:nyquest-backend-android-httpengine"]
+
+[dependencies]
+jni = "0.22.4"
+nyquest = { path = "../..", features = ["blocking"] }
+nyquest-backend-android-httpengine = { path = "../../backends/android-httpengine", features = ["blocking"], optional = true }
+nyquest-backend-cronet = { path = "../../backends/cronet", features = ["blocking"], optional = true }
+
+[lib]
+crate-type = ["cdylib"]

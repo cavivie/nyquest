@@ -5,6 +5,7 @@ members = [
     "backends/*",
     "examples/*",
     "presets/*",
+    "nyquest-backend-tests/android",
 ]
 resolver = "2"
 
@@ -15,7 +16,7 @@ edition = "2021"
 keywords = ["http", "client", "native", "winhttp", "nsurlsession"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/bdbai/nyquest"
-rust-version = "1.80"
+rust-version = "1.88"
 exclude = [".vscode/*", ".github/*", "examples/README.md", "rustfmt.toml"]
 
 [workspace.dependencies]
@@ -55,3 +56,6 @@ thiserror.workspace = true
 
 serde = { version = "1", optional = true }
 serde_json = { version = "1.0.140", optional = true }
+
+[dev-dependencies]
+futures.workspace = true
