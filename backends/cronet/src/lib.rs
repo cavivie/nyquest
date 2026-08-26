@@ -5,11 +5,25 @@
 #![doc = include_str!("../README.md")]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
+#[cfg(all(target_os = "android", feature = "async"))]
+mod r#async;
 #[cfg(target_os = "android")]
-mod android;
+mod backend;
+#[cfg(all(target_os = "android", feature = "blocking"))]
+mod blocking;
+#[cfg(target_os = "android")]
+mod callback;
+#[cfg(target_os = "android")]
+mod error;
+#[cfg(target_os = "android")]
+mod request;
+#[cfg(target_os = "android")]
+mod response;
+#[cfg(target_os = "android")]
+mod state;
 
 #[cfg(target_os = "android")]
-use android::{AndroidBackend, BackendBindings};
+use backend::{AndroidBackend, BackendBindings};
 #[cfg(target_os = "android")]
 use jni::{objects::JObject, JNIEnv};
 
@@ -45,7 +59,7 @@ pub fn register(backend: CronetBackend) {
 
 #[cfg(all(target_os = "android", feature = "async"))]
 impl nyquest_interface::r#async::AsyncBackend for CronetBackend {
-    type AsyncClient = android::AndroidAsyncClient;
+    type AsyncClient = r#async::AndroidAsyncClient;
 
     async fn create_async_client(
         &self,
@@ -57,7 +71,7 @@ impl nyquest_interface::r#async::AsyncBackend for CronetBackend {
 
 #[cfg(all(target_os = "android", feature = "blocking"))]
 impl nyquest_interface::blocking::BlockingBackend for CronetBackend {
-    type BlockingClient = android::AndroidBlockingClient;
+    type BlockingClient = blocking::AndroidBlockingClient;
 
     fn create_blocking_client(
         &self,
