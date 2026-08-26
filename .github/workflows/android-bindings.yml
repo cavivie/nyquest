@@ -1,0 +1,84 @@
+name: Android bindings
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+env:
+  ANDROID_API: "34"
+  CARGO_TERM_COLOR: always
+  CRONET_VERSION: "119.6045.31"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.85.0
+        with:
+          targets: x86_64-linux-android
+
+      - name: Install Android API
+        run: |
+          "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" "platforms;android-${ANDROID_API}"
+
+      - name: Download Cronet API
+        run: |
+          mkdir -p "${RUNNER_TEMP}/cronet-api"
+          curl --fail --location --retry 3 \
+            "https://dl.google.com/dl/android/maven2/org/chromium/net/cronet-api/${CRONET_VERSION}/cronet-api-${CRONET_VERSION}.aar" \
+            --output "${RUNNER_TEMP}/cronet-api/cronet-api.aar"
+          unzip -q "${RUNNER_TEMP}/cronet-api/cronet-api.aar" classes.jar \
+            -d "${RUNNER_TEMP}/cronet-api"
+
+      - name: Validate Cronet Java API
+        run: |
+          mkdir -p "${RUNNER_TEMP}/cronet-declarations" "${RUNNER_TEMP}/cronet-real"
+          javac --release 8 \
+            -d "${RUNNER_TEMP}/cronet-declarations" \
+            backends/cronet/android/api/org/chromium/net/*.java
+          javac --release 8 \
+            -cp "${RUNNER_TEMP}/cronet-declarations" \
+            -d "${RUNNER_TEMP}/cronet-declarations" \
+            backends/cronet/android/src/main/java/io/nyquest/cronet/NativeUrlRequestCallback.java \
+            backends/cronet/android/api-test/io/nyquest/cronet/ApiContract.java
+          javac --release 8 \
+            -cp "${RUNNER_TEMP}/cronet-api/classes.jar" \
+            -d "${RUNNER_TEMP}/cronet-real" \
+            backends/cronet/android/src/main/java/io/nyquest/cronet/NativeUrlRequestCallback.java \
+            backends/cronet/android/api-test/io/nyquest/cronet/ApiContract.java
+
+      - name: Validate HttpEngine Java API
+        run: |
+          mkdir -p "${RUNNER_TEMP}/httpengine-declarations" "${RUNNER_TEMP}/httpengine-real"
+          javac --release 8 \
+            -d "${RUNNER_TEMP}/httpengine-declarations" \
+            backends/android-httpengine/android/api/android/net/http/*.java
+          javac --release 8 \
+            -cp "${RUNNER_TEMP}/httpengine-declarations" \
+            -d "${RUNNER_TEMP}/httpengine-declarations" \
+            backends/android-httpengine/android/src/main/java/io/nyquest/httpengine/NativeUrlRequestCallback.java \
+            backends/android-httpengine/android/api-test/io/nyquest/httpengine/ApiContract.java
+          javac --release 8 \
+            -cp "${ANDROID_HOME}/platforms/android-${ANDROID_API}/android.jar" \
+            -d "${RUNNER_TEMP}/httpengine-real" \
+            backends/android-httpengine/android/src/main/java/io/nyquest/httpengine/NativeUrlRequestCallback.java \
+            backends/android-httpengine/android/api-test/io/nyquest/httpengine/ApiContract.java
+
+      - name: Check generated Rust bindings
+        run: |
+          cargo check --locked --target x86_64-linux-android \
+            -p nyquest-backend-cronet --all-features
+          cargo check --locked --target x86_64-linux-android \
+            -p nyquest-backend-android-httpengine --all-features
