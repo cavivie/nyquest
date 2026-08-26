@@ -144,6 +144,23 @@ jobs:
             exit 1
           fi
 
+          if [ "${{ matrix.backend }}" = "httpengine" ]; then
+            network_ready=""
+            for attempt in $(seq 1 60); do
+              connectivity=$(timeout 5 "${adb_bin}" shell dumpsys connectivity || true)
+              if echo "${connectivity}" | grep -q 'VALIDATED'; then
+                network_ready="1"
+                break
+              fi
+              sleep 1
+            done
+            if [ "${network_ready}" != "1" ]; then
+              "${adb_bin}" shell dumpsys connectivity
+              echo "Timed out waiting for Android network validation"
+              exit 1
+            fi
+          fi
+
           curl --fail --retry 10 --retry-delay 1 \
             http://127.0.0.1:8765/runtime
 
